@@ -16,7 +16,7 @@ from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-__Loading Dataset__
+**Loading Dataset**
 
 file_path = "/content/COMP1801_Coursework_Dataset.csv"
 try:
@@ -27,16 +27,28 @@ except FileNotFoundError:
     raise FileNotFoundError(f"Dataset '{file_path}' not found.")
 print("Data loaded. Shape:", df.shape)
 
+**Data Exploration**
+
+**Basic Exploration**
+
 df.info()
 df.describe(include='all')
 
+**Checking For Negative Values**
+
 negative = df[df['smallDefects'] < 0]
 print('number of negative in smalldefects rows: ', len(negative))
+
+**Replacing Negative Values**
 
 df['smallDefects'] = df['smallDefects'].apply(lambda x: 0 if x < 0 else x)
 
+**Re-Checking for Negative Values**
+
 negative = df[df['smallDefects'] < 0]
 print('number of negative in smalldefects rows: ', len(negative))
+
+**Correlation HeatMap**
 
 numerical_cols = ['coolingRate','quenchTime','forgeTime','HeatTreatTime','Nickel%','Iron%','Cobalt%','Chromium%','smallDefects','largeDefects','sliverDefects']
 correlations = df[numerical_cols + ['Lifespan']].corr()['Lifespan'].drop('Lifespan')
@@ -50,8 +62,12 @@ sns.heatmap(df.corr(numeric_only=True), annot=True, fmt=".2f", cmap='coolwarm')
 plt.title('Correlation Matrix of Metal Parts Features')
 plt.show()
 
+**Scatter Plot**
+
 sns.pairplot(df[['Lifespan','coolingRate','Nickel%','Iron%','smallDefects', 'quenchTime']])
 plt.show()
+
+**Target Variable Analysis**
 
 print("="*50)
 print("TARGET VARIABLE ANALYSIS")
@@ -62,6 +78,8 @@ print(f"Lifespan Std Dev: {df['Lifespan'].std():.2f}")
 print(f"Lifespan Min: {df['Lifespan'].min():.2f}")
 print(f"Lifespan Max: {df['Lifespan'].max():.2f}")
 
+**Distribution Of Lifespan**
+
 plt.figure(figsize=(6, 4))
 sns.histplot(df["Lifespan"], kde=True)
 plt.title("Distribution of Lifespan")
@@ -69,8 +87,12 @@ plt.xlabel("Lifespan (hours)")
 plt.tight_layout()
 plt.show()
 
+**Defining Features (X) and Target (Y)**
+
 X = df.drop('Lifespan', axis=1)
 y_reg = df['Lifespan']
+
+**Defining Classification Target**
 
 y_cls = (y_reg > 1500).astype(int)
 
@@ -81,6 +103,8 @@ categorical_features = df.select_dtypes(include='object').columns.tolist()
 print("Numerical Features:", numerical_features)
 print("\nCategorical Features:", categorical_features)
 
+**Preprocessing: One-Hot Encode Categorical Variables**
+
 preprocessor = ColumnTransformer(
     transformers=[
         ('num', 'passthrough', numerical_features),
@@ -89,10 +113,16 @@ preprocessor = ColumnTransformer(
 
 print("ColumnTransformer 'preprocessor' created successfully.")
 
+**Split Data (80% Train, 20% Test)**
+
 X_train, X_test, y_reg_train, y_reg_test, y_cls_train, y_cls_test = train_test_split(
     X, y_reg, y_cls, test_size=0.2, random_state=42
 )
 print(f"Data split: {X_train.shape[0]} train samples.")
+
+**Linear Regression (Predicts Lifespan in Hours)**
+
+**Inaccurate Prediction**
 
 # Instantiate and train the Linear Regression model
 # Create a pipeline for Linear Regression
@@ -115,6 +145,10 @@ r2_lin_reg = r2_score(y_reg_test, y_pred_lin_reg)
 print(f"MAE: {mae_lin_reg:.2f} hours (Average Error)")
 print(f"MSE: {mse_lin_reg:.2f}")
 print(f"R²: {r2_lin_reg:.4f} (Variance Explained)")
+
+**RANDOM FOREST REGRESSION (Predicts Lifespan in Hours)**
+
+**Hyperparameter Tracking**
 
 # Create a pipeline for Random Forest Regression
 rf_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
@@ -157,6 +191,8 @@ print(rf_mse_table_rounded.to_string(index=False))
 
 print("Random Forest Regressor pipeline created and hyperparameter tracking completed.")
 
+**Regressor Training and Evaluation**
+
 reg_model = Pipeline(steps=[('preprocessor', preprocessor),
                                   ('regressor', RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1, max_depth=15))])
 reg_model.fit(X_train, y_reg_train)
@@ -175,6 +211,8 @@ print(f"MAE: {mae:.2f} hours (Average Error)")
 print(f"MSE: {mse:.2f}")
 print(f"R²: {r2:.4f} (Variance Explained)")
 
+**Regressor Feature Importance Analysis**
+
 ohe = reg_model.named_steps['preprocessor'].named_transformers_['cat']
 categorical_feature_names = ohe.get_feature_names_out(categorical_features)
 
@@ -184,6 +222,8 @@ feature_importances_reg = pd.Series(reg_model.named_steps['regressor'].feature_i
 top_15_features_reg = feature_importances_reg.nlargest(15)
 
 print("Random Forest Regressor feature importances updated.")
+
+**Logistic Regression Classifier**
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix
@@ -212,6 +252,10 @@ print("---------------------------------")
 print(f"Actual (0):| {cm_lr[0, 0]:<9} | {cm_lr[0, 1]:<6}")
 print(f"Actual (1):| {cm_lr[1, 0]:<9} | {cm_lr[1, 1]:<6}")
 
+**GRADIENT BOOSTING CLASSIFIER (Predicts 'Safe' or 'Scrap')**
+
+**Training the Gradient Boosting Classifier model**
+
 # Create a pipeline for Gradient Boosting Classifier
 gbc_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
                                ('classifier', GradientBoostingClassifier(n_estimators=100, learning_rate=0.2, random_state=42))])
@@ -236,7 +280,11 @@ print("---------------------------------")
 print(f"Actual (0):| {cm_gbc[0, 0]:<9} | {cm_gbc[0, 1]:<6}")
 print(f"Actual (1):| {cm_gbc[1, 0]:<9} | {cm_gbc[1, 1]:<6}")
 
+**Visualization**
+
 plt.style.use('seaborn-v0_8-whitegrid')
+
+**Plot 1: Training and Validation MSE vs. n_estimators**
 
 plt.figure(figsize=(10, 6))
 plt.plot(n_estimators_range, train_mse_scores, label='Training MSE', marker='o', color='skyblue')
@@ -248,6 +296,8 @@ plt.legend()
 plt.tight_layout()
 plt.savefig('Plot_1_MSE_vs_Trees.png')
 
+**Plot 2: Actual vs. Predicted Lifespan**
+
 plt.figure(figsize=(10, 6))
 sns.scatterplot(x=y_reg_test, y=y_pred_reg, alpha=0.6, color='darkgreen')
 # Perfect prediction line (y=x)
@@ -258,6 +308,8 @@ plt.ylabel('Predicted Lifespan (Hours)', fontsize=12)
 plt.grid(True, linestyle=':', alpha=0.5)
 plt.savefig('Plot_2_Actual_vs_Predicted.png')
 
+**Plot 3: Top Feature Importances**
+
 plt.figure(figsize=(12, 7))
 sns.barplot(x=top_15_features_reg.values, y=top_15_features_reg.index, hue=top_15_features_reg.index, palette="mako", legend=False)
 plt.title('RF Regressor: Top 15 Most Influential Parameters', fontsize=16)
@@ -265,6 +317,8 @@ plt.xlabel('Feature Importance Score', fontsize=12)
 plt.ylabel('Process / Measurement Parameter', fontsize=12)
 plt.tight_layout()
 plt.savefig('Plot_3_Feature_Importances.png')
+
+**Plot 4: Confusion Matrix Logisitc Regression**
 
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm_lr, annot=True, fmt='d', cmap='Greens', cbar=False,
@@ -277,6 +331,8 @@ plt.xlabel('Predicted Label', fontsize=12)
 plt.tight_layout()
 plt.savefig('Plot_4_Confusion_Matrix_LR.png')
 
+**Plot 5: Confusion Matrix Gradient Boosting Classification**
+
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm_gbc, annot=True, fmt='d', cmap='Blues', cbar=False,
             xticklabels=['Predicted Scrap (0)', 'Predicted Safe (1)'],
@@ -288,6 +344,8 @@ plt.ylabel('Actual Label', fontsize=12)
 plt.xlabel('Predicted Label', fontsize=12)
 plt.tight_layout()
 plt.savefig('Plot_5_Confusion_Matrix_GBC.png')
+
+**Plot 6: ROC Curve**
 
 # --- Gradient Boosting Classifier ROC ---
 y_pred_proba_gb = gbc_pipeline.predict_proba(X_test)[:, 1] # Probability of positive class for GBC
