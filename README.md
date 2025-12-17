@@ -1,2 +1,375 @@
 # Machine_Learning_Project_algo
-Machine Learning predicting metal part lifespan and safety classification using regression and ensemble learning models.
+**Machine Learning predicting metal part lifespan and safety classification using regression and ensemble learning models.**
+
+**Importing All Required Libraries**
+
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+**Loading Dataset**
+
+file_path = "/content/COMP1801_Coursework_Dataset.csv"
+try:
+    df = pd.read_csv(file_path)
+except FileNotFoundError:
+    print(f"Error: Dataset file not found. Please ensure '{file_path}' is available.")
+    # Raise an exception to stop execution and provide a clear error message
+    raise FileNotFoundError(f"Dataset '{file_path}' not found.")
+print("Data loaded. Shape:", df.shape)
+
+**Data Exploration**
+
+**Basic Exploration**
+
+df.info()
+df.describe(include='all')
+
+**Checking For Negative Values**
+
+negative = df[df['smallDefects'] < 0]
+print('number of negative in smalldefects rows: ', len(negative))
+
+**Replacing Negative Values**
+
+df['smallDefects'] = df['smallDefects'].apply(lambda x: 0 if x < 0 else x)
+
+**Re-Checking for Negative Values**
+
+negative = df[df['smallDefects'] < 0]
+print('number of negative in smalldefects rows: ', len(negative))
+
+**Correlation HeatMap**
+
+numerical_cols = ['coolingRate','quenchTime','forgeTime','HeatTreatTime','Nickel%','Iron%','Cobalt%','Chromium%','smallDefects','largeDefects','sliverDefects']
+correlations = df[numerical_cols + ['Lifespan']].corr()['Lifespan'].drop('Lifespan')
+correlations = correlations.sort_values(ascending=False)
+print("Correlation with Lifespan:\n")
+print(correlations)
+
+
+plt.figure(figsize=(8,6))
+sns.heatmap(df.corr(numeric_only=True), annot=True, fmt=".2f", cmap='coolwarm')
+plt.title('Correlation Matrix of Metal Parts Features')
+plt.show()
+
+**Scatter Plot**
+
+sns.pairplot(df[['Lifespan','coolingRate','Nickel%','Iron%','smallDefects', 'quenchTime']])
+plt.show()
+
+**Target Variable Analysis**
+
+print("="*50)
+print("TARGET VARIABLE ANALYSIS")
+print("="*50)
+print(f"Lifespan Mean: {df['Lifespan'].mean():.2f}")
+print(f"Lifespan Median: {df['Lifespan'].median():.2f}")
+print(f"Lifespan Std Dev: {df['Lifespan'].std():.2f}")
+print(f"Lifespan Min: {df['Lifespan'].min():.2f}")
+print(f"Lifespan Max: {df['Lifespan'].max():.2f}")
+
+**Distribution Of Lifespan**
+
+plt.figure(figsize=(6, 4))
+sns.histplot(df["Lifespan"], kde=True)
+plt.title("Distribution of Lifespan")
+plt.xlabel("Lifespan (hours)")
+plt.tight_layout()
+plt.show()
+
+**Defining Features (X) and Target (Y)**
+
+X = df.drop('Lifespan', axis=1)
+y_reg = df['Lifespan']
+
+**Defining Classification Target**
+
+y_cls = (y_reg > 1500).astype(int)
+
+numerical_features = df.select_dtypes(include=np.number).columns.tolist()
+numerical_features.remove('Lifespan') # Remove target variable
+categorical_features = df.select_dtypes(include='object').columns.tolist()
+
+print("Numerical Features:", numerical_features)
+print("\nCategorical Features:", categorical_features)
+
+**Preprocessing: One-Hot Encode Categorical Variables**
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', 'passthrough', numerical_features),
+        ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_features)
+    ])
+
+print("ColumnTransformer 'preprocessor' created successfully.")
+
+**Split Data (80% Train, 20% Test)**
+
+X_train, X_test, y_reg_train, y_reg_test, y_cls_train, y_cls_test = train_test_split(
+    X, y_reg, y_cls, test_size=0.2, random_state=42
+)
+print(f"Data split: {X_train.shape[0]} train samples.")
+
+**Linear Regression (Predicts Lifespan in Hours)**
+
+**Inaccurate Prediction**
+
+# Instantiate and train the Linear Regression model
+# Create a pipeline for Linear Regression
+lin_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                   ('regressor', LinearRegression())])
+
+# Train the pipeline
+lin_reg_pipeline.fit(X_train, y_reg_train)
+y_pred_lin_reg = lin_reg_pipeline.predict(X_test)
+
+print("\n" + "="*45)
+print("REGRESSION MODEL (Linear Regression) Results")
+print("="*45)
+
+# Metrics for Regressor (MAE, MSE, R2)
+mae_lin_reg = mean_absolute_error(y_reg_test, y_pred_lin_reg)
+mse_lin_reg = mean_squared_error(y_reg_test, y_pred_lin_reg)
+r2_lin_reg = r2_score(y_reg_test, y_pred_lin_reg)
+
+print(f"MAE: {mae_lin_reg:.2f} hours (Average Error)")
+print(f"MSE: {mse_lin_reg:.2f}")
+print(f"R²: {r2_lin_reg:.4f} (Variance Explained)")
+
+**RANDOM FOREST REGRESSION (Predicts Lifespan in Hours)**
+
+**Hyperparameter Tracking**
+
+# Create a pipeline for Random Forest Regression
+rf_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('regressor', RandomForestRegressor(random_state=42, n_jobs=-1))])
+
+# Hyperparameter Tracking (n_estimators)
+n_estimators_range = range(10, 301, 20)
+train_mse_scores = []
+test_mse_scores = []
+
+for n in n_estimators_range:
+    # Update the n_estimators parameter in the pipeline's regressor step
+    rf_reg_pipeline.set_params(regressor__n_estimators=n, regressor__max_depth=15)
+    rf_reg_pipeline.fit(X_train, y_reg_train)
+
+    # Predict on training and test sets
+    y_train_pred_temp = rf_reg_pipeline.predict(X_train)
+    y_test_pred_temp = rf_reg_pipeline.predict(X_test)
+
+    # Calculate MSE and append to scores
+    train_mse = mean_squared_error(y_reg_train, y_train_pred_temp)
+    test_mse = mean_squared_error(y_reg_test, y_test_pred_temp)
+    train_mse_scores.append(train_mse)
+    test_mse_scores.append(test_mse)
+
+rf_mse_table = pd.DataFrame({
+    "n_estimators": list(n_estimators_range),
+    "Training MSE": train_mse_scores,
+    "Test MSE": test_mse_scores
+})
+
+# Round for neatness
+rf_mse_table_rounded = rf_mse_table.round(2)
+
+# Show the table
+rf_mse_table_rounded
+
+print("Random Forest Regressor – Training and Test MSE")
+print(rf_mse_table_rounded.to_string(index=False))
+
+print("Random Forest Regressor pipeline created and hyperparameter tracking completed.")
+
+**Regressor Training and Evaluation**
+
+reg_model = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('regressor', RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1, max_depth=15))])
+reg_model.fit(X_train, y_reg_train)
+y_pred_reg = reg_model.predict(X_test)
+
+print("\n" + "="*45)
+print("  REGRESSION MODEL (Random Forest) Results")
+print("="*45)
+
+# Metrics for Regressor (MAE, MSE, R2)
+mae = mean_absolute_error(y_reg_test, y_pred_reg)
+mse = mean_squared_error(y_reg_test, y_pred_reg)
+r2 = r2_score(y_reg_test, y_pred_reg)
+
+print(f"MAE: {mae:.2f} hours (Average Error)")
+print(f"MSE: {mse:.2f}")
+print(f"R²: {r2:.4f} (Variance Explained)")
+
+**Regressor Feature Importance Analysis**
+
+ohe = reg_model.named_steps['preprocessor'].named_transformers_['cat']
+categorical_feature_names = ohe.get_feature_names_out(categorical_features)
+
+all_feature_names = numerical_features + categorical_feature_names.tolist()
+
+feature_importances_reg = pd.Series(reg_model.named_steps['regressor'].feature_importances_, index=all_feature_names)
+top_15_features_reg = feature_importances_reg.nlargest(15)
+
+print("Random Forest Regressor feature importances updated.")
+
+**Logistic Regression Classifier**
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+
+# Create a pipeline for Logistic Regression Classifier
+log_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('classifier', LogisticRegression(solver='liblinear', random_state=42, max_iter=1000))])
+
+# Train the pipeline
+log_reg_pipeline.fit(X_train, y_cls_train)
+y_pred_cls_lr = log_reg_pipeline.predict(X_test)
+
+print("\n" + "="*50)
+print("      CLASSIFICATION MODEL PERFORMANCE (Logistic Regression)")
+print("="*50)
+
+# Classification Report
+print("Classification Report (Target 1: Safe for Use > Median Lifespan):")
+print(classification_report(y_cls_test, y_pred_cls_lr, target_names=['Scrap (0)', 'Safe (1)']))
+
+# Confusion Matrix
+cm_lr = confusion_matrix(y_cls_test, y_pred_cls_lr)
+print("\nConfusion Matrix:")
+print("Predicted: | Scrap (0) | Safe (1)")
+print("---------------------------------")
+print(f"Actual (0):| {cm_lr[0, 0]:<9} | {cm_lr[0, 1]:<6}")
+print(f"Actual (1):| {cm_lr[1, 0]:<9} | {cm_lr[1, 1]:<6}")
+
+**GRADIENT BOOSTING CLASSIFIER (Predicts 'Safe' or 'Scrap')**
+
+**Training the Gradient Boosting Classifier model**
+
+# Create a pipeline for Gradient Boosting Classifier
+gbc_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                               ('classifier', GradientBoostingClassifier(n_estimators=100, learning_rate=0.2, random_state=42))])
+
+# Train the pipeline
+gbc_pipeline.fit(X_train, y_cls_train)
+y_pred_cls_gbc = gbc_pipeline.predict(X_test)
+
+print("\n" + "="*55)
+print("  CLASSIFICATION MODEL (Gradient Boosting) Results")
+print("="*55)
+
+# Classification Report
+print("Classification Report (Target 1: Safe):")
+print(classification_report(y_cls_test, y_pred_cls_gbc, target_names=['Scrap (0)', 'Safe (1)']))
+
+# Confusion Matrix
+cm_gbc = confusion_matrix(y_cls_test, y_pred_cls_gbc)
+print("\nConfusion Matrix:")
+print("Predicted: | Scrap (0) | Safe (1)")
+print("---------------------------------")
+print(f"Actual (0):| {cm_gbc[0, 0]:<9} | {cm_gbc[0, 1]:<6}")
+print(f"Actual (1):| {cm_gbc[1, 0]:<9} | {cm_gbc[1, 1]:<6}")
+
+**Visualization**
+
+plt.style.use('seaborn-v0_8-whitegrid')
+
+**Plot 1: Training and Validation MSE vs. n_estimators**
+
+plt.figure(figsize=(10, 6))
+plt.plot(n_estimators_range, train_mse_scores, label='Training MSE', marker='o', color='skyblue')
+plt.plot(n_estimators_range, test_mse_scores, label='Validation (Test) MSE', marker='o', color='coral')
+plt.title('RF Regressor: MSE vs. Number of Trees', fontsize=16)
+plt.xlabel('Number of Estimators', fontsize=12)
+plt.ylabel('Mean Squared Error (MSE)', fontsize=12)
+plt.legend()
+plt.tight_layout()
+plt.savefig('Plot_1_MSE_vs_Trees.png')
+
+**Plot 2: Actual vs. Predicted Lifespan**
+
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x=y_reg_test, y=y_pred_reg, alpha=0.6, color='darkgreen')
+# Perfect prediction line (y=x)
+plt.plot([min(y_reg_test), max(y_reg_test)], [min(y_reg_test), max(y_reg_test)], color='red', linestyle='--')
+plt.title(f'RF Regressor: Actual vs. Predicted Lifespan (R²: {r2:.4f})', fontsize=16)
+plt.xlabel('Actual Lifespan (Hours)', fontsize=12)
+plt.ylabel('Predicted Lifespan (Hours)', fontsize=12)
+plt.grid(True, linestyle=':', alpha=0.5)
+plt.savefig('Plot_2_Actual_vs_Predicted.png')
+
+**Plot 3: Top Feature Importances**
+
+plt.figure(figsize=(12, 7))
+sns.barplot(x=top_15_features_reg.values, y=top_15_features_reg.index, hue=top_15_features_reg.index, palette="mako", legend=False)
+plt.title('RF Regressor: Top 15 Most Influential Parameters', fontsize=16)
+plt.xlabel('Feature Importance Score', fontsize=12)
+plt.ylabel('Process / Measurement Parameter', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_3_Feature_Importances.png')
+
+**Plot 4: Confusion Matrix Logisitc Regression**
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_lr, annot=True, fmt='d', cmap='Greens', cbar=False,
+            xticklabels=['Predicted Scrap (0)', 'Predicted Safe (1)'],
+            yticklabels=['Actual Scrap (0)', 'Actual Safe (1)'],
+            linecolor='gray', linewidths=0.5)
+plt.title('Logistic Regression Classifier Confusion Matrix', fontsize=16)
+plt.ylabel('Actual Label', fontsize=12)
+plt.xlabel('Predicted Label', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_4_Confusion_Matrix_LR.png')
+
+**Plot 5: Confusion Matrix Gradient Boosting Classification**
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_gbc, annot=True, fmt='d', cmap='Blues', cbar=False,
+            xticklabels=['Predicted Scrap (0)', 'Predicted Safe (1)'],
+            yticklabels=['Actual Scrap (0)', 'Actual Safe (1)'],
+            linecolor='gray', linewidths=0.5)
+# --- Updated Plot Title ---
+plt.title('Gradient Boosting Classifier Confusion Matrix', fontsize=16)
+plt.ylabel('Actual Label', fontsize=12)
+plt.xlabel('Predicted Label', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_5_Confusion_Matrix_GBC.png')
+
+**Plot 6: ROC Curve**
+
+# --- Gradient Boosting Classifier ROC ---
+y_pred_proba_gb = gbc_pipeline.predict_proba(X_test)[:, 1] # Probability of positive class for GBC
+fpr_gb, tpr_gb, thresholds_gb = roc_curve(y_cls_test, y_pred_proba_gb)
+roc_auc_gb = auc(fpr_gb, tpr_gb)
+
+# --- Logistic Regression ROC ---
+y_pred_proba_lr = log_reg_pipeline.predict_proba(X_test)[:, 1] # Probability of positive class for LR
+fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_cls_test, y_pred_proba_lr)
+roc_auc_lr = auc(fpr_lr, tpr_lr)
+
+plt.figure(figsize=(10, 8))
+plt.plot(fpr_gb, tpr_gb, color='darkorange', lw=2, label=f'Gradient Boosting (AUC = {roc_auc_gb:.2f})')
+plt.plot(fpr_lr, tpr_lr, color='green', lw=2, label=f'Logistic Regression (AUC = {roc_auc_lr:.2f})', linestyle='--')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle=':')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve Comparison')
+plt.legend(loc='lower right')
+plt.grid(True, linestyle=':', alpha=0.5)
+plt.tight_layout()
+plt.savefig('Plot_6_ROC_Curve_Comparison.png')
