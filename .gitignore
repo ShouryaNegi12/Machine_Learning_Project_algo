@@ -1,207 +1,314 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[codz]
-*$py.class
+**Importing All Required Libraries**
 
-# C extensions
-*.so
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+__Loading Dataset__
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+file_path = "/content/COMP1801_Coursework_Dataset.csv"
+try:
+    df = pd.read_csv(file_path)
+except FileNotFoundError:
+    print(f"Error: Dataset file not found. Please ensure '{file_path}' is available.")
+    # Raise an exception to stop execution and provide a clear error message
+    raise FileNotFoundError(f"Dataset '{file_path}' not found.")
+print("Data loaded. Shape:", df.shape)
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+df.info()
+df.describe(include='all')
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py.cover
-.hypothesis/
-.pytest_cache/
-cover/
+negative = df[df['smallDefects'] < 0]
+print('number of negative in smalldefects rows: ', len(negative))
 
-# Translations
-*.mo
-*.pot
+df['smallDefects'] = df['smallDefects'].apply(lambda x: 0 if x < 0 else x)
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+negative = df[df['smallDefects'] < 0]
+print('number of negative in smalldefects rows: ', len(negative))
 
-# Flask stuff:
-instance/
-.webassets-cache
+numerical_cols = ['coolingRate','quenchTime','forgeTime','HeatTreatTime','Nickel%','Iron%','Cobalt%','Chromium%','smallDefects','largeDefects','sliverDefects']
+correlations = df[numerical_cols + ['Lifespan']].corr()['Lifespan'].drop('Lifespan')
+correlations = correlations.sort_values(ascending=False)
+print("Correlation with Lifespan:\n")
+print(correlations)
 
-# Scrapy stuff:
-.scrapy
 
-# Sphinx documentation
-docs/_build/
+plt.figure(figsize=(8,6))
+sns.heatmap(df.corr(numeric_only=True), annot=True, fmt=".2f", cmap='coolwarm')
+plt.title('Correlation Matrix of Metal Parts Features')
+plt.show()
 
-# PyBuilder
-.pybuilder/
-target/
+sns.pairplot(df[['Lifespan','coolingRate','Nickel%','Iron%','smallDefects', 'quenchTime']])
+plt.show()
 
-# Jupyter Notebook
-.ipynb_checkpoints
+print("="*50)
+print("TARGET VARIABLE ANALYSIS")
+print("="*50)
+print(f"Lifespan Mean: {df['Lifespan'].mean():.2f}")
+print(f"Lifespan Median: {df['Lifespan'].median():.2f}")
+print(f"Lifespan Std Dev: {df['Lifespan'].std():.2f}")
+print(f"Lifespan Min: {df['Lifespan'].min():.2f}")
+print(f"Lifespan Max: {df['Lifespan'].max():.2f}")
 
-# IPython
-profile_default/
-ipython_config.py
+plt.figure(figsize=(6, 4))
+sns.histplot(df["Lifespan"], kde=True)
+plt.title("Distribution of Lifespan")
+plt.xlabel("Lifespan (hours)")
+plt.tight_layout()
+plt.show()
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+X = df.drop('Lifespan', axis=1)
+y_reg = df['Lifespan']
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+y_cls = (y_reg > 1500).astype(int)
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
+numerical_features = df.select_dtypes(include=np.number).columns.tolist()
+numerical_features.remove('Lifespan') # Remove target variable
+categorical_features = df.select_dtypes(include='object').columns.tolist()
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-#poetry.toml
+print("Numerical Features:", numerical_features)
+print("\nCategorical Features:", categorical_features)
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
-#   https://pdm-project.org/en/latest/usage/project/#working-with-version-control
-#pdm.lock
-#pdm.toml
-.pdm-python
-.pdm-build/
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', 'passthrough', numerical_features),
+        ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_features)
+    ])
 
-# pixi
-#   Similar to Pipfile.lock, it is generally recommended to include pixi.lock in version control.
-#pixi.lock
-#   Pixi creates a virtual environment in the .pixi directory, just like venv module creates one
-#   in the .venv directory. It is recommended not to include this directory in version control.
-.pixi
+print("ColumnTransformer 'preprocessor' created successfully.")
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
+X_train, X_test, y_reg_train, y_reg_test, y_cls_train, y_cls_test = train_test_split(
+    X, y_reg, y_cls, test_size=0.2, random_state=42
+)
+print(f"Data split: {X_train.shape[0]} train samples.")
 
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
+# Instantiate and train the Linear Regression model
+# Create a pipeline for Linear Regression
+lin_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                   ('regressor', LinearRegression())])
 
-# SageMath parsed files
-*.sage.py
+# Train the pipeline
+lin_reg_pipeline.fit(X_train, y_reg_train)
+y_pred_lin_reg = lin_reg_pipeline.predict(X_test)
 
-# Environments
-.env
-.envrc
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+print("\n" + "="*45)
+print("REGRESSION MODEL (Linear Regression) Results")
+print("="*45)
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# Metrics for Regressor (MAE, MSE, R2)
+mae_lin_reg = mean_absolute_error(y_reg_test, y_pred_lin_reg)
+mse_lin_reg = mean_squared_error(y_reg_test, y_pred_lin_reg)
+r2_lin_reg = r2_score(y_reg_test, y_pred_lin_reg)
 
-# Rope project settings
-.ropeproject
+print(f"MAE: {mae_lin_reg:.2f} hours (Average Error)")
+print(f"MSE: {mse_lin_reg:.2f}")
+print(f"R²: {r2_lin_reg:.4f} (Variance Explained)")
 
-# mkdocs documentation
-/site
+# Create a pipeline for Random Forest Regression
+rf_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('regressor', RandomForestRegressor(random_state=42, n_jobs=-1))])
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Hyperparameter Tracking (n_estimators)
+n_estimators_range = range(10, 301, 20)
+train_mse_scores = []
+test_mse_scores = []
 
-# Pyre type checker
-.pyre/
+for n in n_estimators_range:
+    # Update the n_estimators parameter in the pipeline's regressor step
+    rf_reg_pipeline.set_params(regressor__n_estimators=n, regressor__max_depth=15)
+    rf_reg_pipeline.fit(X_train, y_reg_train)
 
-# pytype static type analyzer
-.pytype/
+    # Predict on training and test sets
+    y_train_pred_temp = rf_reg_pipeline.predict(X_train)
+    y_test_pred_temp = rf_reg_pipeline.predict(X_test)
 
-# Cython debug symbols
-cython_debug/
+    # Calculate MSE and append to scores
+    train_mse = mean_squared_error(y_reg_train, y_train_pred_temp)
+    test_mse = mean_squared_error(y_reg_test, y_test_pred_temp)
+    train_mse_scores.append(train_mse)
+    test_mse_scores.append(test_mse)
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+rf_mse_table = pd.DataFrame({
+    "n_estimators": list(n_estimators_range),
+    "Training MSE": train_mse_scores,
+    "Test MSE": test_mse_scores
+})
 
-# Abstra
-# Abstra is an AI-powered process automation framework.
-# Ignore directories containing user credentials, local state, and settings.
-# Learn more at https://abstra.io/docs
-.abstra/
+# Round for neatness
+rf_mse_table_rounded = rf_mse_table.round(2)
 
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+# Show the table
+rf_mse_table_rounded
 
-# Ruff stuff:
-.ruff_cache/
+print("Random Forest Regressor – Training and Test MSE")
+print(rf_mse_table_rounded.to_string(index=False))
 
-# PyPI configuration file
-.pypirc
+print("Random Forest Regressor pipeline created and hyperparameter tracking completed.")
 
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
+reg_model = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('regressor', RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1, max_depth=15))])
+reg_model.fit(X_train, y_reg_train)
+y_pred_reg = reg_model.predict(X_test)
 
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
+print("\n" + "="*45)
+print("  REGRESSION MODEL (Random Forest) Results")
+print("="*45)
+
+# Metrics for Regressor (MAE, MSE, R2)
+mae = mean_absolute_error(y_reg_test, y_pred_reg)
+mse = mean_squared_error(y_reg_test, y_pred_reg)
+r2 = r2_score(y_reg_test, y_pred_reg)
+
+print(f"MAE: {mae:.2f} hours (Average Error)")
+print(f"MSE: {mse:.2f}")
+print(f"R²: {r2:.4f} (Variance Explained)")
+
+ohe = reg_model.named_steps['preprocessor'].named_transformers_['cat']
+categorical_feature_names = ohe.get_feature_names_out(categorical_features)
+
+all_feature_names = numerical_features + categorical_feature_names.tolist()
+
+feature_importances_reg = pd.Series(reg_model.named_steps['regressor'].feature_importances_, index=all_feature_names)
+top_15_features_reg = feature_importances_reg.nlargest(15)
+
+print("Random Forest Regressor feature importances updated.")
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+
+# Create a pipeline for Logistic Regression Classifier
+log_reg_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                                  ('classifier', LogisticRegression(solver='liblinear', random_state=42, max_iter=1000))])
+
+# Train the pipeline
+log_reg_pipeline.fit(X_train, y_cls_train)
+y_pred_cls_lr = log_reg_pipeline.predict(X_test)
+
+print("\n" + "="*50)
+print("      CLASSIFICATION MODEL PERFORMANCE (Logistic Regression)")
+print("="*50)
+
+# Classification Report
+print("Classification Report (Target 1: Safe for Use > Median Lifespan):")
+print(classification_report(y_cls_test, y_pred_cls_lr, target_names=['Scrap (0)', 'Safe (1)']))
+
+# Confusion Matrix
+cm_lr = confusion_matrix(y_cls_test, y_pred_cls_lr)
+print("\nConfusion Matrix:")
+print("Predicted: | Scrap (0) | Safe (1)")
+print("---------------------------------")
+print(f"Actual (0):| {cm_lr[0, 0]:<9} | {cm_lr[0, 1]:<6}")
+print(f"Actual (1):| {cm_lr[1, 0]:<9} | {cm_lr[1, 1]:<6}")
+
+# Create a pipeline for Gradient Boosting Classifier
+gbc_pipeline = Pipeline(steps=[('preprocessor', preprocessor),
+                               ('classifier', GradientBoostingClassifier(n_estimators=100, learning_rate=0.2, random_state=42))])
+
+# Train the pipeline
+gbc_pipeline.fit(X_train, y_cls_train)
+y_pred_cls_gbc = gbc_pipeline.predict(X_test)
+
+print("\n" + "="*55)
+print("  CLASSIFICATION MODEL (Gradient Boosting) Results")
+print("="*55)
+
+# Classification Report
+print("Classification Report (Target 1: Safe):")
+print(classification_report(y_cls_test, y_pred_cls_gbc, target_names=['Scrap (0)', 'Safe (1)']))
+
+# Confusion Matrix
+cm_gbc = confusion_matrix(y_cls_test, y_pred_cls_gbc)
+print("\nConfusion Matrix:")
+print("Predicted: | Scrap (0) | Safe (1)")
+print("---------------------------------")
+print(f"Actual (0):| {cm_gbc[0, 0]:<9} | {cm_gbc[0, 1]:<6}")
+print(f"Actual (1):| {cm_gbc[1, 0]:<9} | {cm_gbc[1, 1]:<6}")
+
+plt.style.use('seaborn-v0_8-whitegrid')
+
+plt.figure(figsize=(10, 6))
+plt.plot(n_estimators_range, train_mse_scores, label='Training MSE', marker='o', color='skyblue')
+plt.plot(n_estimators_range, test_mse_scores, label='Validation (Test) MSE', marker='o', color='coral')
+plt.title('RF Regressor: MSE vs. Number of Trees', fontsize=16)
+plt.xlabel('Number of Estimators', fontsize=12)
+plt.ylabel('Mean Squared Error (MSE)', fontsize=12)
+plt.legend()
+plt.tight_layout()
+plt.savefig('Plot_1_MSE_vs_Trees.png')
+
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x=y_reg_test, y=y_pred_reg, alpha=0.6, color='darkgreen')
+# Perfect prediction line (y=x)
+plt.plot([min(y_reg_test), max(y_reg_test)], [min(y_reg_test), max(y_reg_test)], color='red', linestyle='--')
+plt.title(f'RF Regressor: Actual vs. Predicted Lifespan (R²: {r2:.4f})', fontsize=16)
+plt.xlabel('Actual Lifespan (Hours)', fontsize=12)
+plt.ylabel('Predicted Lifespan (Hours)', fontsize=12)
+plt.grid(True, linestyle=':', alpha=0.5)
+plt.savefig('Plot_2_Actual_vs_Predicted.png')
+
+plt.figure(figsize=(12, 7))
+sns.barplot(x=top_15_features_reg.values, y=top_15_features_reg.index, hue=top_15_features_reg.index, palette="mako", legend=False)
+plt.title('RF Regressor: Top 15 Most Influential Parameters', fontsize=16)
+plt.xlabel('Feature Importance Score', fontsize=12)
+plt.ylabel('Process / Measurement Parameter', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_3_Feature_Importances.png')
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_lr, annot=True, fmt='d', cmap='Greens', cbar=False,
+            xticklabels=['Predicted Scrap (0)', 'Predicted Safe (1)'],
+            yticklabels=['Actual Scrap (0)', 'Actual Safe (1)'],
+            linecolor='gray', linewidths=0.5)
+plt.title('Logistic Regression Classifier Confusion Matrix', fontsize=16)
+plt.ylabel('Actual Label', fontsize=12)
+plt.xlabel('Predicted Label', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_4_Confusion_Matrix_LR.png')
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_gbc, annot=True, fmt='d', cmap='Blues', cbar=False,
+            xticklabels=['Predicted Scrap (0)', 'Predicted Safe (1)'],
+            yticklabels=['Actual Scrap (0)', 'Actual Safe (1)'],
+            linecolor='gray', linewidths=0.5)
+# --- Updated Plot Title ---
+plt.title('Gradient Boosting Classifier Confusion Matrix', fontsize=16)
+plt.ylabel('Actual Label', fontsize=12)
+plt.xlabel('Predicted Label', fontsize=12)
+plt.tight_layout()
+plt.savefig('Plot_5_Confusion_Matrix_GBC.png')
+
+# --- Gradient Boosting Classifier ROC ---
+y_pred_proba_gb = gbc_pipeline.predict_proba(X_test)[:, 1] # Probability of positive class for GBC
+fpr_gb, tpr_gb, thresholds_gb = roc_curve(y_cls_test, y_pred_proba_gb)
+roc_auc_gb = auc(fpr_gb, tpr_gb)
+
+# --- Logistic Regression ROC ---
+y_pred_proba_lr = log_reg_pipeline.predict_proba(X_test)[:, 1] # Probability of positive class for LR
+fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_cls_test, y_pred_proba_lr)
+roc_auc_lr = auc(fpr_lr, tpr_lr)
+
+plt.figure(figsize=(10, 8))
+plt.plot(fpr_gb, tpr_gb, color='darkorange', lw=2, label=f'Gradient Boosting (AUC = {roc_auc_gb:.2f})')
+plt.plot(fpr_lr, tpr_lr, color='green', lw=2, label=f'Logistic Regression (AUC = {roc_auc_lr:.2f})', linestyle='--')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle=':')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve Comparison')
+plt.legend(loc='lower right')
+plt.grid(True, linestyle=':', alpha=0.5)
+plt.tight_layout()
+plt.savefig('Plot_6_ROC_Curve_Comparison.png')
